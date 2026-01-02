@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 240 25% 98%;
+    --foreground: 240 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 25% 15%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    
+    --primary-glow: 250 100% 70%;
+    --primary-subtle: 262 60% 96%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 240 25% 15%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 240 10% 50%;
+
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.75rem;
+
+    /* Educational theme colors */
+    --quiz-bg: 262 100% 98%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 100%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(250 100% 70%));
+    --gradient-subtle: linear-gradient(135deg, hsl(262 60% 98%), hsl(250 60% 96%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(220 14% 98%));
+    
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -4px hsl(262 83% 58% / 0.1);
+    --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.15);
+    --shadow-card: 0 4px 12px -2px hsl(240 25% 15% / 0.08);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 240 25% 8%;
+    --foreground: 240 15% 92%;
+
+    --card: 240 25% 12%;
+    --card-foreground: 240 15% 92%;
+
+    --popover: 240 25% 12%;
+    --popover-foreground: 240 15% 92%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    
+    --primary-glow: 250 100% 70%;
+    --primary-subtle: 262 60% 15%;
+
+    --secondary: 240 20% 20%;
+    --secondary-foreground: 240 15% 92%;
+
+    --muted: 240 20% 20%;
+    --muted-foreground: 240 10% 65%;
+
+    --accent: 262 83% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 20% 20%;
+    --input: 240 20% 20%;
+    --ring: 262 83% 58%;
+
+    /* Educational theme colors - dark */
+    --quiz-bg: 240 25% 10%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 100%;
+
+    /* Gradients - dark */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(250 100% 70%));
+    --gradient-subtle: linear-gradient(135deg, hsl(240 25% 12%), hsl(240 20% 18%));
+    --gradient-card: linear-gradient(135deg, hsl(240 25% 12%), hsl(240 20% 16%));
+    
+    /* Shadows - dark */
+    --shadow-soft: 0 4px 20px -4px hsl(262 83% 58% / 0.3);
+    --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.25);
+    --shadow-card: 0 4px 12px -2px hsl(0 0% 0% / 0.3);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background: linear-gradient(135deg, hsl(var(--quiz-bg)), hsl(var(--background)));
+    min-height: 100vh;
+  }
+
+  .quiz-gradient {
+    background: var(--gradient-primary);
+  }
+
+  .card-gradient {
+    background: var(--gradient-card);
+  }
+
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+
+  .transition-bounce {
+    transition: var(--transition-bounce);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+}
