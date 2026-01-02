@@ -1,73 +1,170 @@
-# Welcome to your Lovable project
+# 🎯 AI-Powered Multi-Input Quiz Generator
 
-## Project info
+A smart web-based application that automatically generates quizzes from **multiple input formats** such as **PDF documents, audio files, text input, and web URLs**.  
+The system uses **Natural Language Processing (NLP)** techniques to extract meaningful content and convert it into **interactive multiple-choice questions**, creating a **gamified learning environment**.
 
-**URL**: https://lovable.dev/projects/0e97174c-14e1-4a5b-8f65-60c11ee9d8d2
+---
 
-## How can I edit this code?
+## 📌 Project Overview
 
-There are several ways of editing your application.
+The **AI-Powered Multi-Input Quiz Generator** is designed to simplify quiz creation for students, teachers, and self-learners. Instead of manually preparing questions, users can upload content or provide input in different formats, and the system automatically generates quizzes.
 
-**Use Lovable**
+### Key Objectives
+- Reduce manual effort in quiz preparation  
+- Support multiple learning content formats  
+- Improve engagement through gamified quizzes  
+- Enable quick assessment and self-evaluation  
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0e97174c-14e1-4a5b-8f65-60c11ee9d8d2) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Features
 
-**Use your preferred IDE**
+### 🔄 Multi-Input Quiz Generation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### 1️⃣ PDF-Based Quiz Generation
+- Upload lecture notes, textbooks, or study materials in PDF format  
+- Automatically extracts text using PDF parsing  
+- Generates MCQs from important sentences  
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+#### 2️⃣ Audio-Based Quiz Generation
+- Upload recorded lectures or explanations  
+- Converts speech to text using speech recognition  
+- Generates quiz questions from transcribed content  
 
-Follow these steps:
+#### 3️⃣ Text-Based Quiz Generation
+- Directly paste any textual content  
+- Useful for quick quiz creation  
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+#### 4️⃣ URL / Web-Based Quiz Generation
+- Provide a webpage link  
+- Extracts meaningful content using web scraping  
+- Generates quizzes from online articles or blogs  
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## 🎮 Gamified Quiz Environment
+- Multiple-choice questions (MCQs)  
+- Real-time score evaluation  
+- Instant feedback after quiz submission  
+- Interactive and learner-friendly interface  
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+---
 
-**Edit a file directly in GitHub**
+## 🧠 How It Works
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. **Input Collection**  
+   User provides input in the form of PDF, audio, text, or URL  
 
-**Use GitHub Codespaces**
+2. **Content Extraction**  
+   - PDF → Text extraction  
+   - Audio → Speech-to-text conversion  
+   - URL → Web scraping  
+   - Text → Direct processing  
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+3. **Text Processing (NLP)**  
+   - Sentence segmentation  
+   - Keyword identification  
+   - Important sentence selection  
 
-## What technologies are used for this project?
+4. **Quiz Generation**  
+   - Fill-in-the-blank question creation  
+   - Multiple-choice option generation  
+   - Correct answer storage  
 
-This project is built with:
+5. **Evaluation & Results**  
+   - User submits answers  
+   - System calculates score  
+   - Results displayed instantly  
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## 🛠️ Technology Stack
 
-Simply open [Lovable](https://lovable.dev/projects/0e97174c-14e1-4a5b-8f65-60c11ee9d8d2) and click on Share -> Publish.
+### Backend
+- Python  
+- Flask  
 
-## Can I connect a custom domain to my Lovable project?
+### NLP & Processing
+- SpeechRecognition  
+- PyPDF2  
+- BeautifulSoup  
+- Natural Language Processing (NLP)  
 
-Yes, you can!
+### Frontend
+- HTML5  
+- CSS3  
+- JavaScript  
+- Bootstrap  
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+---
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## 📊 Functional Modules
+
+| Module | Description |
+|------|-------------|
+| Input Handler | Accepts PDF, audio, text, or URL |
+| Text Extractor | Extracts content from input |
+| NLP Processor | Processes and filters content |
+| Quiz Generator | Generates MCQs |
+| Quiz Evaluator | Calculates score |
+| Result Manager | Displays performance |
+
+---
+
+## 🌐 Web Routes
+
+| Route | Method | Description |
+|------|--------|-------------|
+| `/` | GET | Home page |
+| `/create-quiz` | GET | Quiz creation page |
+| `/api/generate` | POST | Generate quiz |
+| `/api/quiz/<id>` | GET | Fetch quiz |
+| `/api/submit` | POST | Submit answers |
+| `/api/result/<id>` | GET | View results |
+
+---
+
+## 🧪 Testing
+
+### ✔ Black Box Testing
+- Verified quiz generation accuracy  
+- Tested all input formats  
+- Checked result correctness  
+
+### ✔ White Box Testing
+- Validated NLP processing logic  
+- Verified quiz generation algorithms  
+- Tested API workflows  
+
+---
+
+## 📈 Results & Discussion
+
+The system successfully generates quizzes from all supported input formats with good accuracy.  
+The gamified interface improves learner engagement and assessment efficiency.
+
+---
+
+## 🔮 Future Enhancements
+
+- AI-based difficulty level adjustment  
+- User authentication & profiles  
+- Leaderboard and badges  
+- Voice-based quiz answering  
+- Mobile application support  
+
+---
+
+## 📄 Conclusion
+
+The **AI-Powered Multi-Input Quiz Generator** demonstrates the effective use of NLP and web technologies to automate quiz creation.  
+It reduces manual effort, supports diverse learning materials, and enhances the learning experience.
+
+---
+
+## ✍️ Author
+
+**Veeraragavan V**  
+Developed as a comprehensive **AI-powered quiz generation and learning assessment system**, designed to enhance interactive learning through automated quiz creation from multiple input formats.
+
+⭐ If you find this project useful, please consider giving it a star!
