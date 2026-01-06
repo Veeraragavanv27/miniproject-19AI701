@@ -9,6 +9,7 @@ import { toast } from '@/hooks/use-toast';
 import FileUpload from './FileUpload';
 import QuizSettings, { QuizSettingsData } from './QuizSettings';
 import { extractTextFromFile } from '@/utils/fileProcessor';
+import { playTapSound } from '@/utils/soundEffects';
 
 export interface Question {
   question: string;
@@ -48,6 +49,7 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onQuizGenerated }) => {
   });
   const voiceResponsesRef = useRef({ topic: '', questionCount: '', difficulty: '' });
   const [isListening, setIsListening] = useState(false);
+  const [isVoiceInputComplete, setIsVoiceInputComplete] = useState(false);
 
   const updateVoiceResponses = (partial: Partial<typeof voiceResponses>) => {
     setVoiceResponses(prev => {
@@ -93,12 +95,38 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onQuizGenerated }) => {
   };
 
   const startVoiceConversation = async () => {
+    // Reset all states
+    isProcessingRef.current = false;
+    isGeneratingQuizRef.current = false;
+    currentTranscriptRef.current = '';
+    setIsVoiceInputComplete(false);
+    
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping recognition:', e);
+      }
+      recognitionRef.current = null;
+    }
+
+    // Clear any timeouts
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
     setShowVoiceModal(true);
     updateConversationStep('topic');
     updateVoiceResponses({ topic: '', questionCount: '', difficulty: '' });
+    
     // Speak first, then listen
     await promptForStep('topic');
-    startListening();
+    // Small delay before starting to listen
+    setTimeout(() => {
+      startListening();
+    }, 300);
   };
 
   const startListening = () => {
@@ -112,49 +140,136 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onQuizGenerated }) => {
         return;
       }
 
+      // Prevent multiple instances
+      if (isProcessingRef.current) {
+        return;
+      }
+
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      // Stop any existing session
+      
+      // Stop any existing session completely
       if (recognitionRef.current) {
         try {
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onend = null;
           recognitionRef.current.stop();
         } catch (e) {
           console.warn('Failed to stop previous recognition', e);
         }
+        recognitionRef.current = null;
       }
-      recognitionRef.current = new SpeechRecognition();
-      
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-      };
+      // Clear any existing timeouts
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
 
-      recognitionRef.current.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        processVoiceResponse(transcript);
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error !== 'no-speech') {
-          toast({
-            title: "Listening error",
-            description: "Please try speaking again.",
-            variant: "destructive",
-          });
+      // Small delay to ensure previous instance is fully stopped
+      setTimeout(() => {
+        if (isProcessingRef.current) {
+          return;
         }
-      };
 
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
+        recognitionRef.current = new SpeechRecognition();
+        
+        // Use continuous mode to capture complete speech
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'en-US';
+        currentTranscriptRef.current = '';
 
-      recognitionRef.current.start();
+        recognitionRef.current.onstart = () => {
+          setIsListening(true);
+          isProcessingRef.current = false;
+        };
+
+        recognitionRef.current.onresult = (event) => {
+          // Don't process if we're already processing or generating
+          if (isProcessingRef.current || isGeneratingQuizRef.current) {
+            return;
+          }
+
+          // Build transcript from all results
+          let finalTranscript = '';
+          let interimTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          // Update current transcript
+          const newTranscript = (finalTranscript + interimTranscript).trim();
+          currentTranscriptRef.current = newTranscript;
+
+          // Update last speech time
+          lastSpeechTimeRef.current = Date.now();
+
+          // Clear existing timeout
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+
+          // If we have final results, wait for silence before processing
+          if (finalTranscript.trim()) {
+            // Wait 1.5 seconds of silence after final result before processing
+            silenceTimeoutRef.current = setTimeout(() => {
+              // Double-check we're not already processing or generating
+              if (!isProcessingRef.current && !isGeneratingQuizRef.current && currentTranscriptRef.current.trim()) {
+                const transcriptToProcess = currentTranscriptRef.current.trim();
+                // Only process if we have a meaningful transcript (at least 2 characters)
+                if (transcriptToProcess.length >= 2) {
+                  processVoiceResponse(transcriptToProcess);
+                }
+              }
+            }, 1500);
+          }
+        };
+
+        recognitionRef.current.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          
+          // Don't show error for 'no-speech' or 'aborted' (which happens when we stop it)
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            setIsListening(false);
+            isProcessingRef.current = false;
+            toast({
+              title: "Listening error",
+              description: "Please try speaking again.",
+              variant: "destructive",
+            });
+          }
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+          isProcessingRef.current = false;
+          
+          // Clear timeout on end
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+        };
+
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error('Error starting recognition:', error);
+          isProcessingRef.current = false;
+          setIsListening(false);
+        }
+      }, 100);
     } catch (error) {
       console.error('Error starting speech recognition:', error);
+      isProcessingRef.current = false;
       toast({
         title: "Listening failed",
         description: "Please try again.",
@@ -164,42 +279,101 @@ const QuizGenerator: React.FC<QuizGeneratorProps> = ({ onQuizGenerated }) => {
   };
 
   const processVoiceResponse = async (transcript: string) => {
-    const lowerTranscript = transcript.toLowerCase();
+    // Prevent duplicate processing - set flag immediately
+    if (isProcessingRef.current) {
+      return;
+    }
+
+    // Set processing flag immediately to prevent race conditions
+    isProcessingRef.current = true;
+
+    const lowerTranscript = transcript.toLowerCase().trim();
     const step = conversationStepRef.current;
 
-    switch (step) {
-      case 'topic': {
-        updateVoiceResponses({ topic: transcript });
-        updateConversationStep('questions');
-        await promptForStep('questions');
-        startListening();
-        break;
+    // Stop recognition before processing to prevent multiple calls
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping recognition:', e);
       }
+    }
 
-      case 'questions': {
-        // Extract number from speech
-        const numberMatch = lowerTranscript.match(/\d+/);
-        const questionCount = numberMatch ? numberMatch[0] : '10';
-        updateVoiceResponses({ questionCount });
-        updateConversationStep('difficulty');
-        await promptForStep('difficulty');
-        startListening();
-        break;
-      }
+    // Clear any pending timeouts
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
 
-      case 'difficulty': {
-        // Map speech to difficulty levels
-        let difficulty = 'medium';
-        if (lowerTranscript.includes('easy') || lowerTranscript.includes('simple')) {
-          difficulty = 'easy';
-        } else if (lowerTranscript.includes('hard') || lowerTranscript.includes('difficult') || lowerTranscript.includes('advanced')) {
-          difficulty = 'hard';
+    try {
+      switch (step) {
+        case 'topic': {
+          // Only process if we have a meaningful topic (at least 3 characters)
+          if (transcript.trim().length < 3) {
+            // Restart listening if transcript is too short
+            isProcessingRef.current = false;
+            setTimeout(() => startListening(), 500);
+            return;
+          }
+
+          updateVoiceResponses({ topic: transcript.trim() });
+          updateConversationStep('questions');
+          isProcessingRef.current = false;
+          await promptForStep('questions');
+          // Wait a bit before starting next listening session
+          setTimeout(() => {
+            if (!isGeneratingQuizRef.current) {
+              startListening();
+            }
+          }, 500);
+          break;
         }
-        updateVoiceResponses({ difficulty });
-        
-        // Generate quiz with collected information
-        generateVoiceQuiz();
-        break;
+
+        case 'questions': {
+          // Extract number from speech
+          const numberMatch = lowerTranscript.match(/\d+/);
+          const questionCount = numberMatch ? numberMatch[0] : '10';
+          updateVoiceResponses({ questionCount });
+          updateConversationStep('difficulty');
+          isProcessingRef.current = false;
+          await promptForStep('difficulty');
+          // Wait a bit before starting next listening session
+          setTimeout(() => {
+            if (!isGeneratingQuizRef.current) {
+              startListening();
+            }
+          }, 500);
+          break;
+        }
+
+        case 'difficulty': {
+          // Map speech to difficulty levels
+          let difficulty = 'medium';
+          if (lowerTranscript.includes('easy') || lowerTranscript.includes('simple')) {
+            difficulty = 'easy';
+          } else if (lowerTranscript.includes('hard') || lowerTranscript.includes('difficult') || lowerTranscript.includes('advanced')) {
+            difficulty = 'hard';
+          }
+          updateVoiceResponses({ difficulty });
+          isProcessingRef.current = false;
+          
+          // Close modal and mark voice input as complete
+          // User will manually click "Generate Quiz" button
+          setShowVoiceModal(false);
+          setIsVoiceInputComplete(true);
+          
+          toast({
+            title: "Voice input complete",
+            description: "Click 'Generate Quiz' to create your quiz.",
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('Error in processVoiceResponse:', error);
+      isProcessingRef.current = false;
+      if (step === 'difficulty') {
+        isGeneratingQuizRef.current = false;
       }
     }
   };
@@ -236,6 +410,7 @@ Return ONLY a valid JSON array in the following format (no extra text):
 `; 
 
   const generateVoiceQuizFrom = async (topic: string, questionCount: number, difficulty: 'easy' | 'medium' | 'hard') => {
+    // Note: Guard is already checked in generateVoiceQuiz, so we proceed directly here
     setShowVoiceModal(false);
     setIsGenerating(true);
     
@@ -255,7 +430,7 @@ Return ONLY a valid JSON array in the following format (no extra text):
       });
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -275,8 +450,46 @@ Return ONLY a valid JSON array in the following format (no extra text):
         }
       );
 
+      // Handle 429 errors specifically
+      if (response.status === 429) {
+        let errorMessage = 'API rate limit exceeded. Please try again later.';
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            const retryDelay = errorData.error.details?.find((d: any) => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo')?.retryDelay;
+            const quotaInfo = errorData.error.details?.find((d: any) => d['@type'] === 'type.googleapis.com/google.rpc.QuotaFailure');
+            
+            if (quotaInfo?.violations?.[0]) {
+              const quota = quotaInfo.violations[0];
+              errorMessage = `API quota exceeded. ${quota.quotaMetric} limit: ${quota.quotaValue} requests. `;
+              if (retryDelay) {
+                const delaySeconds = Math.ceil(parseFloat(retryDelay.replace('s', '')));
+                errorMessage += `Please retry in ${delaySeconds} seconds.`;
+              } else {
+                errorMessage += 'Please try again later.';
+              }
+            } else if (errorData.error.message) {
+              errorMessage = errorData.error.message;
+            }
+          }
+        } catch (parseError) {
+          console.error('Error parsing 429 response:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
+
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error?.message) {
+            errorMessage = errorData.error.message;
+          }
+        } catch (e) {
+          // Use default error message
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -322,34 +535,84 @@ Return ONLY a valid JSON array in the following format (no extra text):
       });
     } finally {
       setIsGenerating(false);
+      // Reset flag here so it's cleared when generation completes (success or error)
+      isGeneratingQuizRef.current = false;
     }
   };
 
   const generateVoiceQuiz = async () => {
-    const topic = voiceResponsesRef.current.topic.trim();
-    const questionCount = parseInt(voiceResponsesRef.current.questionCount) || 10;
-    const difficulty = (voiceResponsesRef.current.difficulty || 'medium') as 'easy' | 'medium' | 'hard';
-    if (!topic) {
-      toast({ title: 'Missing topic', description: 'Please provide a topic to generate the quiz.', variant: 'destructive' });
+    const now = Date.now();
+    
+    // Prevent multiple simultaneous quiz generations - check and set atomically
+    if (isGeneratingQuizRef.current) {
+      console.log('generateVoiceQuiz: Already generating, skipping duplicate call');
       return;
     }
-    await generateVoiceQuizFrom(topic, questionCount, difficulty);
+
+    // Also check if we're already generating via the state
+    if (isGenerating) {
+      console.log('generateVoiceQuiz: Already generating (state check), skipping');
+      return;
+    }
+
+    // Prevent rapid successive calls (within 2 seconds)
+    if (now - lastQuizGenerationRef.current < 2000) {
+      console.log('generateVoiceQuiz: Too soon after last call, skipping');
+      return;
+    }
+
+    // Set flag immediately to prevent race conditions
+    isGeneratingQuizRef.current = true;
+    lastQuizGenerationRef.current = now;
+
+    try {
+      const topic = voiceResponsesRef.current.topic.trim();
+      const questionCount = parseInt(voiceResponsesRef.current.questionCount) || 10;
+      const difficulty = (voiceResponsesRef.current.difficulty || 'medium') as 'easy' | 'medium' | 'hard';
+      
+      if (!topic) {
+        toast({ title: 'Missing topic', description: 'Please provide a topic to generate the quiz.', variant: 'destructive' });
+        isGeneratingQuizRef.current = false;
+        return;
+      }
+
+      // Stop any active recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.warn('Error stopping recognition before quiz generation:', e);
+        }
+      }
+
+      // Call the API exactly once
+      await generateVoiceQuizFrom(topic, questionCount, difficulty);
+    } catch (error) {
+      console.error('Error in generateVoiceQuiz:', error);
+      // Error is already handled in generateVoiceQuizFrom
+      // Flag will be reset in generateVoiceQuizFrom's finally block
+    }
+    // Note: Flag reset is handled in generateVoiceQuizFrom's finally block
   };
 
-  // Hardcoded API key - replace with your actual Gemini API key
-  const GEMINI_API_KEY = 'AIzaSyBOcbA7p_SK2uCDUNoqN41yBHhus0XbSo4';
+  // Get API key from environment variable
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSpeechTimeRef = useRef<number>(Date.now());
+  const isProcessingRef = useRef<boolean>(false);
+  const isGeneratingQuizRef = useRef<boolean>(false);
+  const currentTranscriptRef = useRef<string>('');
+  const lastQuizGenerationRef = useRef<number>(0);
 
   const isReadyToGenerate = GEMINI_API_KEY &&
     settings.questionCount && settings.difficulty && settings.questionType &&
     ((inputType === 'file' && selectedFile) || 
      (inputType === 'web' && webLink.trim()) || 
-     (inputType === 'voice' && voiceText.trim()));
+     (inputType === 'voice' && isVoiceInputComplete && voiceResponses.topic.trim() && voiceResponses.questionCount && voiceResponses.difficulty));
 
   const generateQuiz = async () => {
     if (!isReadyToGenerate) return;
@@ -437,7 +700,7 @@ ${contentSource}
 
       // Call Gemini API
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -648,7 +911,10 @@ ${contentSource}
             <div className="grid grid-cols-3 gap-4">
               <Button
                 variant={inputType === 'file' ? 'default' : 'outline'}
-                onClick={() => setInputType('file')}
+                onClick={() => {
+                  setInputType('file');
+                  setIsVoiceInputComplete(false);
+                }}
                 className="h-16 flex flex-col items-center justify-center space-y-2 transition-smooth"
               >
                 <FileText className="h-6 w-6" />
@@ -656,7 +922,10 @@ ${contentSource}
               </Button>
               <Button
                 variant={inputType === 'web' ? 'default' : 'outline'}
-                onClick={() => setInputType('web')}
+                onClick={() => {
+                  setInputType('web');
+                  setIsVoiceInputComplete(false);
+                }}
                 className="h-16 flex flex-col items-center justify-center space-y-2 transition-smooth"
               >
                 <Link className="h-6 w-6" />
@@ -664,7 +933,11 @@ ${contentSource}
               </Button>
               <Button
                 variant={inputType === 'voice' ? 'default' : 'outline'}
-                onClick={() => setInputType('voice')}
+                onClick={() => {
+                  setInputType('voice');
+                  // Reset voice input state when switching to voice input
+                  setIsVoiceInputComplete(false);
+                }}
                 className="h-16 flex flex-col items-center justify-center space-y-2 transition-smooth"
               >
                 <Mic className="h-6 w-6" />
@@ -740,13 +1013,51 @@ ${contentSource}
                   </div>
 
                   {/* Instructions */}
-                  <div className="text-center p-6 bg-gray-50 rounded-lg">
-                    <Mic className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 font-medium">Voice Quiz Creator</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Click to start a voice conversation. I'll ask you about the topic, number of questions, and difficulty level.
-                    </p>
-                  </div>
+                  {!isVoiceInputComplete ? (
+                    <div className="text-center p-6 bg-gray-50 rounded-lg">
+                      <Mic className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 font-medium">Voice Quiz Creator</p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Click to start a voice conversation. I'll ask you about the topic, number of questions, and difficulty level.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-green-50 rounded-lg border-2 border-green-200">
+                      <div className="text-center mb-4">
+                        <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
+                          <Sparkles className="h-6 w-6 text-white" />
+                        </div>
+                        <p className="text-green-800 font-semibold text-lg">Voice Input Complete!</p>
+                        <p className="text-sm text-green-600 mt-1">Review your selections below, then click "Generate Quiz"</p>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 mb-1">Topic</p>
+                          <p className="text-gray-800 font-medium">{voiceResponses.topic || 'Not set'}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 mb-1">Number of Questions</p>
+                          <p className="text-gray-800 font-medium">{voiceResponses.questionCount || '10'}</p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 mb-1">Difficulty</p>
+                          <p className="text-gray-800 font-medium capitalize">{voiceResponses.difficulty || 'medium'}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setIsVoiceInputComplete(false);
+                            updateVoiceResponses({ topic: '', questionCount: '', difficulty: '' });
+                          }}
+                        >
+                          Start Over
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -768,7 +1079,14 @@ ${contentSource}
           <Button
             size="lg"
             disabled={!isReadyToGenerate || isGenerating}
-            onClick={generateQuiz}
+            onClick={() => {
+              playTapSound(); // Play tap sound
+              if (inputType === 'voice') {
+                generateVoiceQuiz();
+              } else {
+                generateQuiz();
+              }
+            }}
             className="quiz-gradient text-lg px-8 py-3 shadow-glow transition-bounce hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
           >
             {isGenerating ? (
@@ -852,8 +1170,23 @@ ${contentSource}
                 variant="outline"
                 onClick={() => {
                   setShowVoiceModal(false);
+                  isProcessingRef.current = false;
+                  isGeneratingQuizRef.current = false;
+                  
+                  // Stop recognition
                   if (recognitionRef.current) {
-                    recognitionRef.current.stop();
+                    try {
+                      recognitionRef.current.stop();
+                    } catch (e) {
+                      console.warn('Error stopping recognition:', e);
+                    }
+                    recognitionRef.current = null;
+                  }
+
+                  // Clear timeouts
+                  if (silenceTimeoutRef.current) {
+                    clearTimeout(silenceTimeoutRef.current);
+                    silenceTimeoutRef.current = null;
                   }
                 }}
                 className="mt-4"
